@@ -141,7 +141,8 @@ class SerialBridge(Node):
         if 0 < dt < 1.0 and self.arduino_moving:
             self._update_odom(linear, angular, dt)
         else:
-            # Publish static zero-velocity joint states to keep RViz happy
+            # Publish static zero-velocity joint states and TF to keep RViz happy
+            self._publish_odom_and_tf(now, 0.0, 0.0)
             self._publish_joint_states(now, 0.0, 0.0)
 
     def _update_odom(self, linear, angular, dt):
@@ -158,7 +159,10 @@ class SerialBridge(Node):
         self.right_wheel_pos += (v_right / wheel_radius) * dt
 
         now = self.get_clock().now()
+        self._publish_odom_and_tf(now, linear, angular)
+        self._publish_joint_states(now, v_left / wheel_radius, v_right / wheel_radius)
 
+    def _publish_odom_and_tf(self, now, linear, angular):
         # TF: odom -> base_footprint (match URDF root frame)
         t = TransformStamped()
         t.header.stamp = now.to_msg()
@@ -182,9 +186,6 @@ class SerialBridge(Node):
         odom.twist.twist.linear.x = linear
         odom.twist.twist.angular.z = angular
         self.odom_pub.publish(odom)
-
-        # Publish joint states
-        self._publish_joint_states(now, v_left / wheel_radius, v_right / wheel_radius)
 
     def _publish_joint_states(self, now, left_vel=0.0, right_vel=0.0):
         """Publish wheel and servo joint positions."""
