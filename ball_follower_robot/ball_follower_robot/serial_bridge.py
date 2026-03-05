@@ -22,7 +22,7 @@ Publishes:
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, TransformStamped
-from sensor_msgs.msg import LaserScan
+from sensor_msgs.msg import LaserScan, JointState
 from nav_msgs.msg import Odometry
 import tf2_ros
 import serial
@@ -76,17 +76,18 @@ class SerialBridge(Node):
         # ---------- Publishers ----------
         self.odom_pub = self.create_publisher(Odometry, '/odom', 50)
         self.scan_pub = self.create_publisher(LaserScan, '/scan', 10)
+        self.joint_pub = self.create_publisher(JointState, '/joint_states', 10)
 
         # TF
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
-        self.static_tf = tf2_ros.StaticTransformBroadcaster(self)
-        self._publish_laser_tf()
 
         # ---------- State ----------
         self.latest_twist = Twist()
         self.x = 0.0
         self.y = 0.0
         self.theta = 0.0
+        self.left_wheel_pos = 0.0
+        self.right_wheel_pos = 0.0
         self.last_time = self.get_clock().now()
         self.scan_data = [float('inf')] * self.num_readings
         self.scan_lock = threading.Lock()
@@ -101,17 +102,6 @@ class SerialBridge(Node):
         # ---------- Timers ----------
         self.cmd_timer = self.create_timer(1.0 / cmd_rate, self.send_motor_cmd)
         self.scan_timer = self.create_timer(1.0 / scan_rate, self.publish_scan)
-
-    def _publish_laser_tf(self):
-        """Static TF: base_link -> laser_frame."""
-        t = TransformStamped()
-        t.header.stamp = self.get_clock().now().to_msg()
-        t.header.frame_id = 'base_link'
-        t.child_frame_id = 'laser_frame'
-        t.transform.translation.x = 0.05
-        t.transform.translation.z = 0.10
-        t.transform.rotation.w = 1.0
-        self.static_tf.sendTransform(t)
 
     # ==================== MOTOR SIDE ====================
 
@@ -152,13 +142,20 @@ class SerialBridge(Node):
         self.y += linear * math.sin(self.theta) * dt
         self.theta = math.atan2(math.sin(self.theta), math.cos(self.theta))
 
+        # Update wheel positions from differential drive kinematics
+        wheel_radius = 0.0275  # matches URDF
+        v_left = linear - (angular * self.wheel_base / 2.0)
+        v_right = linear + (angular * self.wheel_base / 2.0)
+        self.left_wheel_pos += (v_left / wheel_radius) * dt
+        self.right_wheel_pos += (v_right / wheel_radius) * dt
+
         now = self.get_clock().now()
 
-        # TF: odom -> base_link
+        # TF: odom -> base_footprint (match URDF root frame)
         t = TransformStamped()
         t.header.stamp = now.to_msg()
         t.header.frame_id = 'odom'
-        t.child_frame_id = 'base_link'
+        t.child_frame_id = 'base_footprint'
         t.transform.translation.x = self.x
         t.transform.translation.y = self.y
         t.transform.rotation.z = math.sin(self.theta / 2.0)
@@ -169,7 +166,7 @@ class SerialBridge(Node):
         odom = Odometry()
         odom.header.stamp = now.to_msg()
         odom.header.frame_id = 'odom'
-        odom.child_frame_id = 'base_link'
+        odom.child_frame_id = 'base_footprint'
         odom.pose.pose.position.x = self.x
         odom.pose.pose.position.y = self.y
         odom.pose.pose.orientation.z = math.sin(self.theta / 2.0)
@@ -177,6 +174,19 @@ class SerialBridge(Node):
         odom.twist.twist.linear.x = linear
         odom.twist.twist.angular.z = angular
         self.odom_pub.publish(odom)
+
+        # Publish joint states
+        self._publish_joint_states(now, v_left / wheel_radius, v_right / wheel_radius)
+
+    def _publish_joint_states(self, now, left_vel=0.0, right_vel=0.0):
+        """Publish wheel and servo joint positions."""
+        js = JointState()
+        js.header.stamp = now.to_msg()
+        js.name = ['left_wheel_joint', 'right_wheel_joint', 'servo_joint']
+        js.position = [self.left_wheel_pos, self.right_wheel_pos, 0.0]
+        js.velocity = [left_vel, right_vel, 0.0]
+        js.effort = []
+        self.joint_pub.publish(js)
 
     # ==================== SCAN SIDE ====================
 

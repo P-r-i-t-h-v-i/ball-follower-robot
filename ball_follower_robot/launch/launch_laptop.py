@@ -20,11 +20,27 @@ import os
 
 def generate_launch_description():
 
-    # ---- Load RViz config ----
+    # ---- Load package share paths ----
     pkg_share = FindPackageShare('ball_follower_robot').find('ball_follower_robot')
     rviz_config = os.path.join(pkg_share, 'rviz', 'robot_view.rviz')
+    urdf_file = os.path.join(pkg_share, 'urdf', 'robot.urdf')
 
-    # ---- RViz2 (visualization only) ----
+    with open(urdf_file, 'r') as f:
+        robot_description = f.read()
+
+    # ---- Robot State Publisher (loads URDF locally for RViz) ----
+    robot_state_publisher_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[{
+            'robot_description': robot_description,
+            'use_sim_time': False,
+        }]
+    )
+
+    # ---- RViz2 (visualization) ----
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
@@ -34,5 +50,6 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        robot_state_publisher_node,
         rviz_node,
     ])
