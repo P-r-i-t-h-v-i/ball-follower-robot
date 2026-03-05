@@ -59,13 +59,7 @@ def generate_launch_description():
         }]
     )
 
-    # ---- Joint State Publisher (for servo revolute joint) ----
-    joint_state_publisher_node = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_publisher',
-        output='screen',
-    )
+
 
     # ---- Serial Bridge (motor + ultrasonic on single serial port) ----
     serial_bridge_node = Node(
@@ -159,7 +153,6 @@ def generate_launch_description():
         camera_index_arg,
         show_preview_arg,
         robot_state_publisher_node,
-        joint_state_publisher_node,
         serial_bridge_node,
         object_tracker_node,
         path_tracker_node,
