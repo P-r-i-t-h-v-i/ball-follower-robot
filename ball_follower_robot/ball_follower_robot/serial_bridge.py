@@ -89,6 +89,9 @@ class SerialBridge(Node):
         self.left_wheel_pos = 0.0
         self.right_wheel_pos = 0.0
         self.servo_angle_rad = 0.0  # current servo angle in radians
+        
+        # Real motor power status from Arduino
+        self.arduino_moving = False
         self.last_time = self.get_clock().now()
         self.scan_data = [float('inf')] * self.num_readings
         self.scan_lock = threading.Lock()
@@ -130,12 +133,16 @@ class SerialBridge(Node):
                 except serial.SerialException as e:
                     self.get_logger().error(f'Serial write error: {e}')
 
-        # Odometry
+        # Odometry: only integrate if Arduino confirms motors are powered
         now = self.get_clock().now()
         dt = (now - self.last_time).nanoseconds / 1e9
         self.last_time = now
-        if 0 < dt < 1.0:
+        
+        if 0 < dt < 1.0 and self.arduino_moving:
             self._update_odom(linear, angular, dt)
+        else:
+            # Publish static zero-velocity joint states to keep RViz happy
+            self._publish_joint_states(now, 0.0, 0.0)
 
     def _update_odom(self, linear, angular, dt):
         self.theta += angular * dt
@@ -216,6 +223,13 @@ class SerialBridge(Node):
                                     self.scan_data[idx] = dist_m
                                 else:
                                     self.scan_data[idx] = float('inf')
+                elif line.startswith('P,'):
+                    # Motor power from Arduino: P,leftPWM,rightPWM
+                    parts = line.split(',')
+                    if len(parts) == 3:
+                        left_pwm = int(parts[1])
+                        right_pwm = int(parts[2])
+                        self.arduino_moving = (left_pwm != 0) or (right_pwm != 0)
                 else:
                     time.sleep(0.005)
             except Exception as e:
