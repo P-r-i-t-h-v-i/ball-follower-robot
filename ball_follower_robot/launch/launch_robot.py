@@ -72,7 +72,7 @@ def generate_launch_description():
             'baud_rate': 115200,
             'max_pwm': 200,
             'wheel_base': 0.215,
-            'max_speed': 0.5,
+            'max_speed': 0.25,
             'max_range': 4.0,
             'min_range': 0.02,
             'num_readings': 37,
