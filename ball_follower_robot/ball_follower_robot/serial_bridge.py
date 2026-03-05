@@ -88,6 +88,7 @@ class SerialBridge(Node):
         self.theta = 0.0
         self.left_wheel_pos = 0.0
         self.right_wheel_pos = 0.0
+        self.servo_angle_rad = 0.0  # current servo angle in radians
         self.last_time = self.get_clock().now()
         self.scan_data = [float('inf')] * self.num_readings
         self.scan_lock = threading.Lock()
@@ -183,7 +184,7 @@ class SerialBridge(Node):
         js = JointState()
         js.header.stamp = now.to_msg()
         js.name = ['left_wheel_joint', 'right_wheel_joint', 'servo_joint']
-        js.position = [self.left_wheel_pos, self.right_wheel_pos, 0.0]
+        js.position = [self.left_wheel_pos, self.right_wheel_pos, self.servo_angle_rad]
         js.velocity = [left_vel, right_vel, 0.0]
         js.effort = []
         self.joint_pub.publish(js)
@@ -206,6 +207,8 @@ class SerialBridge(Node):
                     if len(parts) == 3:
                         angle = int(parts[1])
                         dist_m = float(parts[2]) / 100.0
+                        # Update servo angle: Arduino 0-180° → URDF -π/2 to +π/2 rad
+                        self.servo_angle_rad = math.radians(angle - 90)
                         idx = angle // 5
                         if 0 <= idx < self.num_readings:
                             with self.scan_lock:
