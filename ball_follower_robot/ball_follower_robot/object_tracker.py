@@ -131,11 +131,11 @@ class ObjectTracker(Node):
                     f'Ball at ({cx},{cy}) r={radius} -> '
                     f'lin={twist.linear.x:.2f} ang={twist.angular.z:.2f}')
             else:
-                # Ball too small / noise — search by rotating
-                twist.angular.z = 0.3  # slow rotate to search
+                # Ball too small / noise — do not move
+                twist.angular.z = 0.0
         else:
-            # No ball detected — rotate slowly to search
-            twist.angular.z = 0.3
+            # No ball detected — do not move
+            twist.angular.z = 0.0
 
         self.cmd_pub.publish(twist)
 
