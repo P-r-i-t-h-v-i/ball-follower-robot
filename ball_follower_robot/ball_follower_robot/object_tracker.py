@@ -113,19 +113,18 @@ class ObjectTracker(Node):
                 cv2.putText(frame, f'r={radius}', (cx - 30, cy - radius - 10),
                             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                # --- Compute steering ---
-                # Horizontal error: negative = ball is left, positive = right
-                error_x = (cx - center_x) / center_x  # normalized -1..1
-                twist.angular.z = -error_x * self.max_ang
-
-                # Forward speed: proportional to how far the ball is
-                # (smaller radius = farther away = go faster)
                 if radius < self.target_radius:
                     # Scale: 1.0 when far, 0.0 when at target radius
                     forward_ratio = 1.0 - (radius / self.target_radius)
                     twist.linear.x = forward_ratio * self.max_lin
+                    
+                    # Compute steering only when moving toward ball
+                    # Horizontal error: negative = ball is left, positive = right
+                    error_x = (cx - center_x) / center_x  # normalized -1..1
+                    twist.angular.z = -error_x * self.max_ang
                 else:
-                    twist.linear.x = 0.0  # close enough, stop
+                    twist.linear.x = 0.0  # close enough, stop forward
+                    twist.angular.z = 0.0 # close enough, stop steering
 
                 self.get_logger().debug(
                     f'Ball at ({cx},{cy}) r={radius} -> '
